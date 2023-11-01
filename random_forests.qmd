@@ -3,14 +3,16 @@ title: "Random Forest for Data Integration"
 author: "Payam Emami"
 format: html
 editor: visual
+editor_options: 
+  chunk_output_type: console
 ---
 
 Setup the environment
 
-```{r,message=FALSE,warning=FALSE}
+```{r,message=FALSE,warning=FALSE,eval=FALSE}
 
 # List of packages to be installed
-packages <- c("ggplot2", "randomForest", "blockForest")
+packages <- c("ggplot2", "randomForest", "blockForest","cluster","gplots","mclust")
 
 # Check and install missing packages
 new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
@@ -117,9 +119,9 @@ The output tells us that the model was initiated with the **`randomForest()`** f
 
 The model is composed of 500 trees ("Number of trees: 500"), and at each decision split in the trees, 13 variables or features were randomly selected and assessed to identify the optimal split ("No. of variables tried at each split: 13").
 
-The Out-Of-Bag (OOB) error estimate is 15.33%. OOB error is a unique feature of Random Forest; it provides an internal validation mechanism. During the training of each tree, a subset of the data is left out (not sampled) and used to validate the tree, giving an error estimate. This OOB error is particularly useful as it offers an unbiased performance metric without the need for cross-validation or a separate test set. In this case, the 15.33% OOB error rate means the model is expected to misclassify approximately 15.33% of new samples, offering a glimpse into the model's accuracy without a separate validation set.
+The Out-Of-Bag (OOB) error estimate is `r as.numeric(round(rf_mirna$err.rate[rf_mirna$ntree, "OOB"] * 100, digits = 2))`%. OOB error is a unique feature of Random Forest; it provides an internal validation mechanism. During the training of each tree, a subset of the data is left out (not sampled) and used to validate the tree, giving an error estimate. This OOB error is particularly useful as it offers an unbiased performance metric without the need for cross-validation or a separate test set. In this case, the `r as.numeric(round(rf_mirna$err.rate[rf_mirna$ntree, "OOB"] * 100, digits = 2))`% OOB error rate means the model is expected to misclassify approximately 15.33% of new samples, offering a glimpse into the model's accuracy without a separate validation set.
 
-The confusion matrix for the training set reveals detailed class-specific performance. For the 'Basal' subtype, the model achieved a class error rate of 6.67%, with 42 correct predictions and 3 misclassifications. The 'Her2' subtype encountered a higher error rate of 60%, resulting from a substantial number of misclassifications. In contrast, the 'LumA' subtype exhibited impressive accuracy, with a mere 2.67% error rate and 73 correct classifications.
+The confusion matrix for the training set reveals detailed class-specific performance. For the 'Basal' subtype, the model achieved a class error rate of `r round(rf_mirna$confusion["Basal","class.error"]*100,2)`%, with `r rf_mirna$confusion["Basal","Basal"]` correct predictions. The 'Her2' subtype encountered a higher error rate of `r  round(rf_mirna$confusion["Her2","class.error"]*100,2)`%, resulting from a substantial number of misclassifications. In contrast, the 'LumA' subtype exhibited impressive accuracy, with a mere `r round(rf_mirna$confusion["LumA","class.error"]*100,2)`% error rate and `r rf_mirna$confusion["LumA","LumA"]` correct classifications.
 
 We can go ahead and check the performance of the model on the test data.
 
@@ -286,17 +288,14 @@ This is a similar output to the one we have seen before. The differences are:
 
     -   `Mtry` refers to the number of variables randomly sampled at each split when building the trees. Here, two values are provided, indicating two different blocks of features with different `mtry` values.
 
-2.  OOB prediction error: 10.67%
+2.  OOB prediction error: `r round(merged_model$biased_oob_error_donotuse*100,2)`%
 
-    -   Out-Of-Bag (OOB) error is a method of measuring the prediction error of random forests, bagging, and boosting classifiers. Here, it shows that the model has an OOB error rate of 10.67%, meaning it incorrectly classified around 10.67% of the samples during training.
+    -   Out-Of-Bag (OOB) error is a method of measuring the prediction error of random forests, bagging, and boosting classifiers. Here, it shows that the model has an OOB error rate of `r round(merged_model$biased_oob_error_donotuse*100,2)`%, meaning it incorrectly classified around `r round(merged_model$biased_oob_error_donotuse*100,2)`% of the samples during training.
 
 3.  \$paramvalues
 
-    -   `[1] 0.377801 1.000000`: These are the optimized parameter values associated with each block of features. They are obtained through the parameter tuning process and are used to weight the blocks during model training.
+    -   `r merged_model$paramvalues`: These are the optimized parameter values associated with each block of features. They are obtained through the parameter tuning process and are used to weight the blocks during model training.
 
-4.  \$biased_oob_error_donotuse
-
-    1.  `[1] 0.1066667`: This is another representation of the OOB error but it's labeled as "biased" and "do not use", indicating that this particular metric might not be reliable or should be interpreted with caution.
 
 Since the OOBs have been used for doing parameter tunning, we cannot use them to evaluate the model. we will have to do cross-validation. We leave this for later and continue with the prediction.
 
@@ -339,7 +338,7 @@ One of these is called proximities. Random Forest proximity measures are a valua
 Let's try to extract those for the training and testing data
 
 ```{r}
-
+library(ggplot2)
 colnames(merge_data) <- gsub("-", ".", colnames(merge_data))
 # get node labels
 nodes<-blockForest:::predict.blockForest (merged_model$forest,data =merge_data ,type="terminalNodes")
@@ -436,7 +435,7 @@ ggplot(importance_measure_integration[1:30,],
 
 ### Unsupervised data integration
 
-Random Forest algorithm is inherently supervised but its flexiblity allows us to perform unsupervised data integration with it. In order to do that, we are going to do a simple trick. We are going to shuffle our data to create a synthetic copy of our original data. We are then going to perform the modelling such that the model differnetiate between the real and synthetic copy. After than we can go ahead with the distance calculations etc.
+Random Forest algorithm is inherently supervised but its flexiblity allows us to perform unsupervised data integration with it. In order to do that, we are going to do a simple trick. We are going to shuffle our data to create a synthetic copy of our original data. We are then going to perform the modelling such that the model differentiate between the real and synthetic copy. After than we can go ahead with the distance calculations etc.
 
 ```{r}
 
@@ -490,3 +489,147 @@ names(data_points) <- c("p1","p2","groups")
 ggplot(rbind(data_points))+geom_point(aes(x=p1,y=p2,color=groups))
 
 ```
+
+Now given that we can use random forest for unsupervised distance calculation, we now proceed with clustering of the variables we have selected in the supervised part (top 30 variables):
+
+
+```{r}
+
+set.seed(123)
+RF_variables<-randomForest::randomForest(t(merge_data[,importance_measure_integration[1:30,]$features]))
+
+rf.mds <- stats::cmdscale(1-RF_variables$proximity, eig = TRUE, k = 2)
+plot(rf.mds$points,type="n")
+text(rf.mds$points,rownames(rf.mds$points))
+
+```
+
+In the code above, we used `randomForest` package to do unsupervised clustering. **Can you guess why we did not use `blockForest`**?
+
+The results of `randomForest` contain the proximity matrix which can use as a proxity to distance between the features in the random forest space. We can now use this proximity matrix to perform clustering of relevant features.
+
+In order to perform clustering, we are going to use the `pam` (Partitioning Around Medoids) algorithm. We use pam because it supports distance matrix, which means it can take the proximity matrix generated by `randomForest` and use it as a base to determine the distance between clusters. The way pam works is by initially selecting data points called medoids from the dataset. These medoids serve as the center of clusters. During the iterative optimization process, the algorithm assesses and swaps medoids with non-medoid data points to minimize the sum of the distances between the data points and their corresponding medoids. One of the main benefits of using pam over other clustering algorithms is its robustness to outliers. Since it uses medoids (actual data points) as the center of clusters, instead of mean values like in k-means, it is less influenced by extreme values. Moreover, pam is known for producing more accurate and consistent clusters, especially when the dataset has noise and outliers. Another advantage is its interpretability; by using actual data points as representatives, it is easier to understand and explain the characteristics of each cluster. All these attributes make pam a suitable choice for clustering features based on the proximity matrix from `randomForest`.
+
+```{r}
+
+features_pam <- cluster::pam(1-RF_variables$proximity,3)
+plot(rf.mds$points,type="n")
+text(rf.mds$points,rownames(rf.mds$points),col=features_pam$clustering)
+
+```
+
+Having identified `pam` as our clustering algorithm of choice, the next critical step is determining the optimal number of clusters. A standard and effective technique for this purpose is the silhouette method. The silhouette score measures how similar an object is to its own cluster compared to other clusters. Values range between -1 and 1, with a high value indicating that the object is well matched to its own cluster and poorly matched to neighboring clusters. By plotting the silhouette scores for different numbers of clusters, we can visually inspect and select the number that gives the highest silhouette score, thus ensuring optimal cluster cohesion and separation. The code snippet provided demonstrates the application of `pam` on the `randomForest` proximity matrix for a specified number of clusters, in this case, three. By iterating over different cluster counts and assessing their silhouette scores, we can confidently determine the most appropriate number of clusters for our data.
+
+```{r}
+
+
+# Calculate silhouette widths for different number of clusters
+sil_width <- sapply(2:10, function(k) {
+  pam_fit <- cluster::pam(1-RF_variables$proximity, k)
+  mean(cluster::silhouette(pam_fit)[,"sil_width"])
+})
+sil_width<-c(0,sil_width)
+# Plot the silhouette scores
+plot(1:10, sil_width, type='b', xlab='Number of clusters', ylab='Silhouette Width', main='Optimal number of clusters based on Silhouette Width')
+
+```
+
+By executing the above code, we will obtain a graph that helps in identifying the number of clusters that maximize the silhouette width, providing a clear criterion for cluster selection. **What is the best number of clusters according to Silhouette Width?**
+
+```{r}
+features_pam <- cluster::pam(1-RF_variables$proximity,which.max(sil_width))
+plot(rf.mds$points,type="n")
+text(rf.mds$points,rownames(rf.mds$points),col=features_pam$clustering)
+```
+
+So given the clustering, we can have a look at a heatmap to check the expression pattern of the data:
+
+```{r}
+
+# Generate colors for clusters
+cluster_colors <- rainbow(length(unique(features_pam$clustering)))
+side_colors <- cluster_colors[features_pam$clustering[order(features_pam$clustering)]]
+# Generate colors for subtypes
+subtype_colors <- rainbow(length(unique(breast.TCGA$data.train$subtype)))
+row_side_colors <- subtype_colors[as.numeric(as.factor(breast.TCGA$data.train$subtype))]
+
+# Plotting the heatmap
+gplots::heatmap.2(as.matrix(merge_data[,importance_measure_integration[1:30,]$features][,order(features_pam$clustering)]),
+                  notecol="black",      # change font color of cell labels to black
+                  density.info="none",  # turn off density plot inside color legend
+                  trace="none",         # turn off trace lines inside the heatmap
+                  margins = c(12,9),    # space for the labels
+                  col = colorRampPalette(c("blue", "white", "red"))(25), # color scheme
+                  srtCol = 45,          # rotate column labels
+                  adjCol = c(0.5, 0.5), # center column labels
+                  dendrogram="row",     # only draw a row dendrogram
+                  Colv=F,
+                  cexRow = 0.9,         # size of row labels
+                  cexCol = 0.9,
+                  scale = "row",        # size of column labels
+                  ColSideColors = side_colors,RowSideColors =row_side_colors) # Add the column side colors
+
+```
+
+
+The scaled expression pattern more or less shows the our clusters has been effectively capturing the underlining pattern in the data.
+
+The clustering so far has been on the training set, One question that we can ask is whether we see similar pattern of feature clustering if we perform the same analysis on the test set?
+
+```{r}
+set.seed(123)
+RF_variables_test<-randomForest::randomForest(t(merged_data_test[,importance_measure_integration[1:30,]$features]))
+
+rf.mds_test <- stats::cmdscale(1-RF_variables_test$proximity, eig = TRUE, k = 2)
+features_pam_test <- cluster::pam(1-RF_variables_test$proximity,which.max(sil_width))
+
+par(mfrow=c(1,2))
+plot(rf.mds$points,type="n",main="Training set")
+text(rf.mds$points,rownames(rf.mds$points),col=features_pam$clustering)
+
+plot(rf.mds_test$points,type="n",main="Test set")
+text(rf.mds_test$points,rownames(rf.mds_test$points),col=features_pam_test$clustering)
+
+```
+Just looking at the plots, the clustering looks very similar. This is a good indication. We can also go one step further and quantify the comparisons of two clusters:
+
+```{r}
+
+library(ggplot2)
+
+# Create a contingency table
+contingency_table <- table(features_pam$clustering, features_pam_test$clustering)
+
+# Convert the table to a data frame for ggplot
+df <- as.data.frame(as.table(contingency_table))
+
+# Create a heatmap
+ggplot(data = df, aes(x = Var1, y = Var2)) + 
+  geom_tile(aes(fill = Freq), color = "white") +
+  geom_text(aes(label = sprintf("%d", Freq)), vjust = 1) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "Cross-tabulation of Clusters",
+       x = "Training Clusters",
+       y = "Test Clusters",
+       fill = "Count") +
+  theme_minimal()
+
+
+```
+
+Here we used a cross-tabulation heatmap (or confusion matrix heatmap) which provides a visual representation of the relationship between two clustering results. In this context, it will show how clusters from the training data correspond to clusters from the test data. 
+
+We can also use other, more formal, measures to say something about the clustering comparison:
+
+```{r}
+cat("Adjusted Rand Index: ",mclust::adjustedRandIndex(features_pam$clustering, features_pam_test$clustering),"\n")
+```
+
+The Adjusted Rand Index (ARI) is a measure that quantifies the similarity between two data clusterings, accounting for chance grouping of elements. The value of ARI lies between -1 and 1, where an ARI of 1 indicates that the two clusterings are identical, and an ARI of 0 suggests that the clustering result is no better than a random assignment. In our case, the computed ARI provides a numerical assessment of the consistency between our training and test data clusterings. A higher ARI value indicates a closer alignment between the two clusterings. Our ARI is fairly OK which makes us more confident about our selected variables. 
+
+This concludes our lab, but one can go forward with pathway analysis, etc., to further explore the underlying biological processes and molecular interactions associated with the identified clusters.
+
+
+
+
+

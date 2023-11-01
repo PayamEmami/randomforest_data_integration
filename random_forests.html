@@ -109,7 +109,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Setup the environment</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="co"># List of packages to be installed</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>packages <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"ggplot2"</span>, <span class="st">"randomForest"</span>, <span class="st">"blockForest"</span>)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>packages <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"ggplot2"</span>, <span class="st">"randomForest"</span>, <span class="st">"blockForest"</span>,<span class="st">"cluster"</span>,<span class="st">"gplots"</span>,<span class="st">"mclust"</span>)</span>
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Check and install missing packages</span></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>new_packages <span class="ot">&lt;-</span> packages[<span class="sc">!</span>(packages <span class="sc">%in%</span> <span class="fu">installed.packages</span>()[,<span class="st">"Package"</span>])]</span>
@@ -254,7 +254,7 @@ LumA      0    2   73  0.02666667</code></pre>
 <p>The output tells us that the model was initiated with the <strong><code>randomForest()</code></strong> function, using the miRNA data as predictors (x) and the cancer subtypes as the response (y). It is a classification type model, as indicated.</p>
 <p>The model is composed of 500 trees (“Number of trees: 500”), and at each decision split in the trees, 13 variables or features were randomly selected and assessed to identify the optimal split (“No.&nbsp;of variables tried at each split: 13”).</p>
 <p>The Out-Of-Bag (OOB) error estimate is 15.33%. OOB error is a unique feature of Random Forest; it provides an internal validation mechanism. During the training of each tree, a subset of the data is left out (not sampled) and used to validate the tree, giving an error estimate. This OOB error is particularly useful as it offers an unbiased performance metric without the need for cross-validation or a separate test set. In this case, the 15.33% OOB error rate means the model is expected to misclassify approximately 15.33% of new samples, offering a glimpse into the model’s accuracy without a separate validation set.</p>
-<p>The confusion matrix for the training set reveals detailed class-specific performance. For the ‘Basal’ subtype, the model achieved a class error rate of 6.67%, with 42 correct predictions and 3 misclassifications. The ‘Her2’ subtype encountered a higher error rate of 60%, resulting from a substantial number of misclassifications. In contrast, the ‘LumA’ subtype exhibited impressive accuracy, with a mere 2.67% error rate and 73 correct classifications.</p>
+<p>The confusion matrix for the training set reveals detailed class-specific performance. For the ‘Basal’ subtype, the model achieved a class error rate of 11.11%, with 40 correct predictions. The ‘Her2’ subtype encountered a higher error rate of `r 53.33%, resulting from a substantial number of misclassifications. In contrast, the ‘LumA’ subtype exhibited impressive accuracy, with a mere 2.67% error rate and 73 correct classifications.</p>
 <p>We can go ahead and check the performance of the model on the test data.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>predictions_mirna <span class="ot">&lt;-</span> randomForest<span class="sc">:::</span><span class="fu">predict.randomForest</span>(rf_mirna,</span>
@@ -439,18 +439,14 @@ $biased_oob_error_donotuse
 <ul>
 <li><code>Mtry</code> refers to the number of variables randomly sampled at each split when building the trees. Here, two values are provided, indicating two different blocks of features with different <code>mtry</code> values.</li>
 </ul></li>
-<li><p>OOB prediction error: 10.67%</p>
+<li><p>OOB prediction error: 8.67%</p>
 <ul>
-<li>Out-Of-Bag (OOB) error is a method of measuring the prediction error of random forests, bagging, and boosting classifiers. Here, it shows that the model has an OOB error rate of 10.67%, meaning it incorrectly classified around 10.67% of the samples during training.</li>
+<li>Out-Of-Bag (OOB) error is a method of measuring the prediction error of random forests, bagging, and boosting classifiers. Here, it shows that the model has an OOB error rate of 8.67%, meaning it incorrectly classified around 8.67% of the samples during training.</li>
 </ul></li>
 <li><p>$paramvalues</p>
 <ul>
-<li><code>[1] 0.377801 1.000000</code>: These are the optimized parameter values associated with each block of features. They are obtained through the parameter tuning process and are used to weight the blocks during model training.</li>
+<li>0.5911938, 1: These are the optimized parameter values associated with each block of features. They are obtained through the parameter tuning process and are used to weight the blocks during model training.</li>
 </ul></li>
-<li><p>$biased_oob_error_donotuse</p>
-<ol type="1">
-<li><code>[1] 0.1066667</code>: This is another representation of the OOB error but it’s labeled as “biased” and “do not use”, indicating that this particular metric might not be reliable or should be interpreted with caution.</li>
-</ol></li>
 </ol>
 <p>Since the OOBs have been used for doing parameter tunning, we cannot use them to evaluate the model. we will have to do cross-validation. We leave this for later and continue with the prediction.</p>
 <div class="cell">
@@ -500,68 +496,69 @@ $biased_oob_error_donotuse
 <p>One of these is called proximities. Random Forest proximity measures are a valuable tool for understanding the similarity between data points within a dataset. When a Random Forest model is trained, each tree in the forest classifies each data point into a specific leaf node. The proximity measure between two data points is calculated based on the frequency with which they end up in the same leaf node across all trees in the forest. In other words, the more often two data points are classified into the same leaf node, the higher their proximity measure, indicating a higher level of similarity. This measure can be normalized and used for various purposes, such as data clustering, outlier detection, and missing value imputation, providing insights into the underlying structure and relationships within the data.</p>
 <p>Let’s try to extract those for the training and testing data</p>
 <div class="cell">
-<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(merge_data) <span class="ot">&lt;-</span> <span class="fu">gsub</span>(<span class="st">"-"</span>, <span class="st">"."</span>, <span class="fu">colnames</span>(merge_data))</span>
-<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="co"># get node labels</span></span>
-<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>nodes<span class="ot">&lt;-</span>blockForest<span class="sc">:::</span><span class="fu">predict.blockForest</span> (merged_model<span class="sc">$</span>forest,<span class="at">data =</span>merge_data ,<span class="at">type=</span><span class="st">"terminalNodes"</span>)</span>
-<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>node_labels_training <span class="ot">&lt;-</span> nodes<span class="sc">$</span>predictions</span>
-<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a><span class="co"># empty proximity matrix</span></span>
-<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>n_samples <span class="ot">&lt;-</span> <span class="fu">nrow</span>(merge_data)</span>
-<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>proximity_matrix <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow=</span>n_samples, <span class="at">ncol=</span>n_samples)</span>
-<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a>inbag <span class="ot">=</span> <span class="fu">simplify2array</span>(merged_model<span class="sc">$</span>forest<span class="sc">$</span>inbag.counts)</span>
-<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the proximity matrix</span></span>
-<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
-<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (j <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
-<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>    tree_idx <span class="ot">=</span> inbag[i, ] <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> inbag[j, ] <span class="sc">==</span> <span class="dv">0</span></span>
-<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>    proximity_matrix[i, j] <span class="ot">&lt;-</span> <span class="fu">sum</span>(node_labels_training[i,tree_idx] <span class="sc">==</span> node_labels_training[j,tree_idx]) <span class="sc">/</span> <span class="fu">sum</span>(tree_idx)</span>
-<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a></span>
+<div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a><span class="fu">colnames</span>(merge_data) <span class="ot">&lt;-</span> <span class="fu">gsub</span>(<span class="st">"-"</span>, <span class="st">"."</span>, <span class="fu">colnames</span>(merge_data))</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a><span class="co"># get node labels</span></span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>nodes<span class="ot">&lt;-</span>blockForest<span class="sc">:::</span><span class="fu">predict.blockForest</span> (merged_model<span class="sc">$</span>forest,<span class="at">data =</span>merge_data ,<span class="at">type=</span><span class="st">"terminalNodes"</span>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>node_labels_training <span class="ot">&lt;-</span> nodes<span class="sc">$</span>predictions</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a><span class="co"># empty proximity matrix</span></span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a>n_samples <span class="ot">&lt;-</span> <span class="fu">nrow</span>(merge_data)</span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>proximity_matrix <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow=</span>n_samples, <span class="at">ncol=</span>n_samples)</span>
+<span id="cb23-10"><a href="#cb23-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-11"><a href="#cb23-11" aria-hidden="true" tabindex="-1"></a>inbag <span class="ot">=</span> <span class="fu">simplify2array</span>(merged_model<span class="sc">$</span>forest<span class="sc">$</span>inbag.counts)</span>
+<span id="cb23-12"><a href="#cb23-12" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the proximity matrix</span></span>
+<span id="cb23-13"><a href="#cb23-13" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
+<span id="cb23-14"><a href="#cb23-14" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (j <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
+<span id="cb23-15"><a href="#cb23-15" aria-hidden="true" tabindex="-1"></a>    tree_idx <span class="ot">=</span> inbag[i, ] <span class="sc">==</span> <span class="dv">0</span> <span class="sc">&amp;</span> inbag[j, ] <span class="sc">==</span> <span class="dv">0</span></span>
+<span id="cb23-16"><a href="#cb23-16" aria-hidden="true" tabindex="-1"></a>    proximity_matrix[i, j] <span class="ot">&lt;-</span> <span class="fu">sum</span>(node_labels_training[i,tree_idx] <span class="sc">==</span> node_labels_training[j,tree_idx]) <span class="sc">/</span> <span class="fu">sum</span>(tree_idx)</span>
+<span id="cb23-17"><a href="#cb23-17" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb23-18"><a href="#cb23-18" aria-hidden="true" tabindex="-1"></a>}</span>
 <span id="cb23-19"><a href="#cb23-19" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to distances</span></span>
-<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a>distances <span class="ot">&lt;-</span> <span class="dv">1</span> <span class="sc">-</span> (proximity_matrix)</span>
-<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a><span class="co"># do MDS</span></span>
-<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a>rf.mds <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">cmdscale</span>(distances, <span class="at">eig =</span> <span class="cn">TRUE</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
-<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a><span class="co"># plot MDS</span></span>
-<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a>data_points <span class="ot">&lt;-</span> rf.mds<span class="sc">$</span>points</span>
-<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>data_points <span class="ot">&lt;-</span> <span class="fu">cbind.data.frame</span>(data_points,<span class="at">groups=</span><span class="fu">as.character</span>(breast.TCGA<span class="sc">$</span>data.train<span class="sc">$</span>subtype),<span class="at">dataset=</span><span class="st">"training"</span>)</span>
-<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data_points) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"p1"</span>,<span class="st">"p2"</span>,<span class="st">"groups"</span>,<span class="st">"dataset"</span>)</span>
-<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-20"><a href="#cb23-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-21"><a href="#cb23-21" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to distances</span></span>
+<span id="cb23-22"><a href="#cb23-22" aria-hidden="true" tabindex="-1"></a>distances <span class="ot">&lt;-</span> <span class="dv">1</span> <span class="sc">-</span> (proximity_matrix)</span>
+<span id="cb23-23"><a href="#cb23-23" aria-hidden="true" tabindex="-1"></a><span class="co"># do MDS</span></span>
+<span id="cb23-24"><a href="#cb23-24" aria-hidden="true" tabindex="-1"></a>rf.mds <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">cmdscale</span>(distances, <span class="at">eig =</span> <span class="cn">TRUE</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
+<span id="cb23-25"><a href="#cb23-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-26"><a href="#cb23-26" aria-hidden="true" tabindex="-1"></a><span class="co"># plot MDS</span></span>
+<span id="cb23-27"><a href="#cb23-27" aria-hidden="true" tabindex="-1"></a>data_points <span class="ot">&lt;-</span> rf.mds<span class="sc">$</span>points</span>
+<span id="cb23-28"><a href="#cb23-28" aria-hidden="true" tabindex="-1"></a>data_points <span class="ot">&lt;-</span> <span class="fu">cbind.data.frame</span>(data_points,<span class="at">groups=</span><span class="fu">as.character</span>(breast.TCGA<span class="sc">$</span>data.train<span class="sc">$</span>subtype),<span class="at">dataset=</span><span class="st">"training"</span>)</span>
+<span id="cb23-29"><a href="#cb23-29" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data_points) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"p1"</span>,<span class="st">"p2"</span>,<span class="st">"groups"</span>,<span class="st">"dataset"</span>)</span>
 <span id="cb23-30"><a href="#cb23-30" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a><span class="do">## perform the same for the test set</span></span>
-<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a>nodes<span class="ot">&lt;-</span>blockForest<span class="sc">:::</span><span class="fu">predict.blockForest</span> (merged_model<span class="sc">$</span>forest,<span class="at">data =</span>merged_data_test ,<span class="at">type=</span><span class="st">"terminalNodes"</span>)</span>
-<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a>node_labels_test <span class="ot">&lt;-</span> nodes<span class="sc">$</span>predictions</span>
-<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a><span class="co"># empty proximity matrix</span></span>
-<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a>n_samples <span class="ot">&lt;-</span> <span class="fu">nrow</span>(merged_data_test)</span>
-<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a>proximity_matrix <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow=</span>n_samples, <span class="at">ncol=</span>n_samples)</span>
-<span id="cb23-39"><a href="#cb23-39" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-40"><a href="#cb23-40" aria-hidden="true" tabindex="-1"></a><span class="co"># get ing bag samples</span></span>
-<span id="cb23-41"><a href="#cb23-41" aria-hidden="true" tabindex="-1"></a>inbag <span class="ot">=</span> <span class="fu">simplify2array</span>(merged_model<span class="sc">$</span>forest<span class="sc">$</span>inbag.counts)</span>
-<span id="cb23-42"><a href="#cb23-42" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the proximity matrix</span></span>
-<span id="cb23-43"><a href="#cb23-43" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
-<span id="cb23-44"><a href="#cb23-44" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (j <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
-<span id="cb23-45"><a href="#cb23-45" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-46"><a href="#cb23-46" aria-hidden="true" tabindex="-1"></a>    proximity_matrix[i, j] <span class="ot">&lt;-</span> <span class="fu">sum</span>(node_labels_test[i,] <span class="sc">==</span> node_labels_test[j,])</span>
-<span id="cb23-47"><a href="#cb23-47" aria-hidden="true" tabindex="-1"></a>  }</span>
-<span id="cb23-48"><a href="#cb23-48" aria-hidden="true" tabindex="-1"></a>}</span>
-<span id="cb23-49"><a href="#cb23-49" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-50"><a href="#cb23-50" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to distances</span></span>
-<span id="cb23-51"><a href="#cb23-51" aria-hidden="true" tabindex="-1"></a>distances <span class="ot">&lt;-</span> <span class="dv">1</span> <span class="sc">-</span> (proximity_matrix)<span class="sc">/</span>merged_model<span class="sc">$</span>forest<span class="sc">$</span>num.trees</span>
-<span id="cb23-52"><a href="#cb23-52" aria-hidden="true" tabindex="-1"></a><span class="co"># do MDS</span></span>
-<span id="cb23-53"><a href="#cb23-53" aria-hidden="true" tabindex="-1"></a>rf.mds <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">cmdscale</span>(distances, <span class="at">eig =</span> <span class="cn">TRUE</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
-<span id="cb23-54"><a href="#cb23-54" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-55"><a href="#cb23-55" aria-hidden="true" tabindex="-1"></a><span class="co"># plot MDS</span></span>
-<span id="cb23-56"><a href="#cb23-56" aria-hidden="true" tabindex="-1"></a>data_points_test <span class="ot">&lt;-</span> rf.mds<span class="sc">$</span>points</span>
-<span id="cb23-57"><a href="#cb23-57" aria-hidden="true" tabindex="-1"></a>data_points_test <span class="ot">&lt;-</span> <span class="fu">cbind.data.frame</span>(data_points_test,<span class="at">groups=</span><span class="fu">as.character</span>(breast.TCGA<span class="sc">$</span>data.test<span class="sc">$</span>subtype),<span class="at">dataset=</span><span class="st">"test"</span>)</span>
-<span id="cb23-58"><a href="#cb23-58" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data_points_test) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"p1"</span>,<span class="st">"p2"</span>,<span class="st">"groups"</span>,<span class="st">"dataset"</span>)</span>
-<span id="cb23-59"><a href="#cb23-59" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb23-60"><a href="#cb23-60" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">rbind</span>(data_points,data_points_test))<span class="sc">+</span><span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">x=</span>p1,<span class="at">y=</span>p2,<span class="at">color=</span>groups,<span class="at">shape=</span>dataset))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<span id="cb23-31"><a href="#cb23-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-32"><a href="#cb23-32" aria-hidden="true" tabindex="-1"></a><span class="do">## perform the same for the test set</span></span>
+<span id="cb23-33"><a href="#cb23-33" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-34"><a href="#cb23-34" aria-hidden="true" tabindex="-1"></a>nodes<span class="ot">&lt;-</span>blockForest<span class="sc">:::</span><span class="fu">predict.blockForest</span> (merged_model<span class="sc">$</span>forest,<span class="at">data =</span>merged_data_test ,<span class="at">type=</span><span class="st">"terminalNodes"</span>)</span>
+<span id="cb23-35"><a href="#cb23-35" aria-hidden="true" tabindex="-1"></a>node_labels_test <span class="ot">&lt;-</span> nodes<span class="sc">$</span>predictions</span>
+<span id="cb23-36"><a href="#cb23-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-37"><a href="#cb23-37" aria-hidden="true" tabindex="-1"></a><span class="co"># empty proximity matrix</span></span>
+<span id="cb23-38"><a href="#cb23-38" aria-hidden="true" tabindex="-1"></a>n_samples <span class="ot">&lt;-</span> <span class="fu">nrow</span>(merged_data_test)</span>
+<span id="cb23-39"><a href="#cb23-39" aria-hidden="true" tabindex="-1"></a>proximity_matrix <span class="ot">&lt;-</span> <span class="fu">matrix</span>(<span class="dv">0</span>, <span class="at">nrow=</span>n_samples, <span class="at">ncol=</span>n_samples)</span>
+<span id="cb23-40"><a href="#cb23-40" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-41"><a href="#cb23-41" aria-hidden="true" tabindex="-1"></a><span class="co"># get ing bag samples</span></span>
+<span id="cb23-42"><a href="#cb23-42" aria-hidden="true" tabindex="-1"></a>inbag <span class="ot">=</span> <span class="fu">simplify2array</span>(merged_model<span class="sc">$</span>forest<span class="sc">$</span>inbag.counts)</span>
+<span id="cb23-43"><a href="#cb23-43" aria-hidden="true" tabindex="-1"></a><span class="co"># Compute the proximity matrix</span></span>
+<span id="cb23-44"><a href="#cb23-44" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> (i <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
+<span id="cb23-45"><a href="#cb23-45" aria-hidden="true" tabindex="-1"></a>  <span class="cf">for</span> (j <span class="cf">in</span> <span class="fu">seq_len</span>(n_samples)) {</span>
+<span id="cb23-46"><a href="#cb23-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-47"><a href="#cb23-47" aria-hidden="true" tabindex="-1"></a>    proximity_matrix[i, j] <span class="ot">&lt;-</span> <span class="fu">sum</span>(node_labels_test[i,] <span class="sc">==</span> node_labels_test[j,])</span>
+<span id="cb23-48"><a href="#cb23-48" aria-hidden="true" tabindex="-1"></a>  }</span>
+<span id="cb23-49"><a href="#cb23-49" aria-hidden="true" tabindex="-1"></a>}</span>
+<span id="cb23-50"><a href="#cb23-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-51"><a href="#cb23-51" aria-hidden="true" tabindex="-1"></a><span class="co"># convert to distances</span></span>
+<span id="cb23-52"><a href="#cb23-52" aria-hidden="true" tabindex="-1"></a>distances <span class="ot">&lt;-</span> <span class="dv">1</span> <span class="sc">-</span> (proximity_matrix)<span class="sc">/</span>merged_model<span class="sc">$</span>forest<span class="sc">$</span>num.trees</span>
+<span id="cb23-53"><a href="#cb23-53" aria-hidden="true" tabindex="-1"></a><span class="co"># do MDS</span></span>
+<span id="cb23-54"><a href="#cb23-54" aria-hidden="true" tabindex="-1"></a>rf.mds <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">cmdscale</span>(distances, <span class="at">eig =</span> <span class="cn">TRUE</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
+<span id="cb23-55"><a href="#cb23-55" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-56"><a href="#cb23-56" aria-hidden="true" tabindex="-1"></a><span class="co"># plot MDS</span></span>
+<span id="cb23-57"><a href="#cb23-57" aria-hidden="true" tabindex="-1"></a>data_points_test <span class="ot">&lt;-</span> rf.mds<span class="sc">$</span>points</span>
+<span id="cb23-58"><a href="#cb23-58" aria-hidden="true" tabindex="-1"></a>data_points_test <span class="ot">&lt;-</span> <span class="fu">cbind.data.frame</span>(data_points_test,<span class="at">groups=</span><span class="fu">as.character</span>(breast.TCGA<span class="sc">$</span>data.test<span class="sc">$</span>subtype),<span class="at">dataset=</span><span class="st">"test"</span>)</span>
+<span id="cb23-59"><a href="#cb23-59" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data_points_test) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"p1"</span>,<span class="st">"p2"</span>,<span class="st">"groups"</span>,<span class="st">"dataset"</span>)</span>
+<span id="cb23-60"><a href="#cb23-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb23-61"><a href="#cb23-61" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">rbind</span>(data_points,data_points_test))<span class="sc">+</span><span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">x=</span>p1,<span class="at">y=</span>p2,<span class="at">color=</span>groups,<span class="at">shape=</span>dataset))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
-<p><img src="random_forests_files/figure-html/unnamed-chunk-24-1.png" class="img-fluid" width="672"></p>
+<p><img src="random_forests_files/figure-html/unnamed-chunk-12-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
 <p>Using multidimensional scaling, we have collapsed the dataset to a set of lower dimentions that preserve the overall distance between the datapoints.</p>
@@ -590,13 +587,13 @@ $biased_oob_error_donotuse
 <span id="cb24-17"><a href="#cb24-17" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>() <span class="sc">+</span></span>
 <span id="cb24-18"><a href="#cb24-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_manual</span>(<span class="at">values =</span> <span class="fu">c</span>(<span class="st">"mirna"</span> <span class="ot">=</span> <span class="st">"skyblue"</span>,<span class="st">"mrna"</span><span class="ot">=</span><span class="st">"red"</span>))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
-<p><img src="random_forests_files/figure-html/unnamed-chunk-26-1.png" class="img-fluid" width="672"></p>
+<p><img src="random_forests_files/figure-html/unnamed-chunk-13-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
 </section>
 <section id="unsupervised-data-integration" class="level3">
 <h3 class="anchored" data-anchor-id="unsupervised-data-integration">Unsupervised data integration</h3>
-<p>Random Forest algorithm is inherently supervised but its flexiblity allows us to perform unsupervised data integration with it. In order to do that, we are going to do a simple trick. We are going to shuffle our data to create a synthetic copy of our original data. We are then going to perform the modelling such that the model differnetiate between the real and synthetic copy. After than we can go ahead with the distance calculations etc.</p>
+<p>Random Forest algorithm is inherently supervised but its flexiblity allows us to perform unsupervised data integration with it. In order to do that, we are going to do a simple trick. We are going to shuffle our data to create a synthetic copy of our original data. We are then going to perform the modelling such that the model differentiate between the real and synthetic copy. After than we can go ahead with the distance calculations etc.</p>
 <div class="cell">
 <div class="sourceCode cell-code" id="cb25"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>  <span class="co"># merge the data first </span></span>
 <span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>merge_data <span class="ot">&lt;-</span> <span class="fu">cbind</span>(breast.TCGA<span class="sc">$</span>data.train<span class="sc">$</span>mirna,</span>
@@ -647,9 +644,136 @@ $biased_oob_error_donotuse
 <span id="cb25-47"><a href="#cb25-47" aria-hidden="true" tabindex="-1"></a><span class="fu">names</span>(data_points) <span class="ot">&lt;-</span> <span class="fu">c</span>(<span class="st">"p1"</span>,<span class="st">"p2"</span>,<span class="st">"groups"</span>)</span>
 <span id="cb25-48"><a href="#cb25-48" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="fu">rbind</span>(data_points))<span class="sc">+</span><span class="fu">geom_point</span>(<span class="fu">aes</span>(<span class="at">x=</span>p1,<span class="at">y=</span>p2,<span class="at">color=</span>groups))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
 <div class="cell-output-display">
-<p><img src="random_forests_files/figure-html/unnamed-chunk-28-1.png" class="img-fluid" width="672"></p>
+<p><img src="random_forests_files/figure-html/unnamed-chunk-14-1.png" class="img-fluid" width="672"></p>
 </div>
 </div>
+<p>Now given that we can use random forest for unsupervised distance calculation, we now proceed with clustering of the variables we have selected in the supervised part (top 30 variables):</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb26"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb26-1"><a href="#cb26-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb26-2"><a href="#cb26-2" aria-hidden="true" tabindex="-1"></a>RF_variables<span class="ot">&lt;-</span>randomForest<span class="sc">::</span><span class="fu">randomForest</span>(<span class="fu">t</span>(merge_data[,importance_measure_integration[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>,]<span class="sc">$</span>features]))</span>
+<span id="cb26-3"><a href="#cb26-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb26-4"><a href="#cb26-4" aria-hidden="true" tabindex="-1"></a>rf.mds <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">cmdscale</span>(<span class="dv">1</span><span class="sc">-</span>RF_variables<span class="sc">$</span>proximity, <span class="at">eig =</span> <span class="cn">TRUE</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
+<span id="cb26-5"><a href="#cb26-5" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(rf.mds<span class="sc">$</span>points,<span class="at">type=</span><span class="st">"n"</span>)</span>
+<span id="cb26-6"><a href="#cb26-6" aria-hidden="true" tabindex="-1"></a><span class="fu">text</span>(rf.mds<span class="sc">$</span>points,<span class="fu">rownames</span>(rf.mds<span class="sc">$</span>points))</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-15-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>In the code above, we used <code>randomForest</code> package to do unsupervised clustering. <strong>Can you guess why we did not use <code>blockForest</code></strong>?</p>
+<p>The results of <code>randomForest</code> contain the proximity matrix which can use as a proxity to distance between the features in the random forest space. We can now use this proximity matrix to perform clustering of relevant features.</p>
+<p>In order to perform clustering, we are going to use the <code>pam</code> (Partitioning Around Medoids) algorithm. We use pam because it supports distance matrix, which means it can take the proximity matrix generated by <code>randomForest</code> and use it as a base to determine the distance between clusters. The way pam works is by initially selecting data points called medoids from the dataset. These medoids serve as the center of clusters. During the iterative optimization process, the algorithm assesses and swaps medoids with non-medoid data points to minimize the sum of the distances between the data points and their corresponding medoids. One of the main benefits of using pam over other clustering algorithms is its robustness to outliers. Since it uses medoids (actual data points) as the center of clusters, instead of mean values like in k-means, it is less influenced by extreme values. Moreover, pam is known for producing more accurate and consistent clusters, especially when the dataset has noise and outliers. Another advantage is its interpretability; by using actual data points as representatives, it is easier to understand and explain the characteristics of each cluster. All these attributes make pam a suitable choice for clustering features based on the proximity matrix from <code>randomForest</code>.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb27"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>features_pam <span class="ot">&lt;-</span> cluster<span class="sc">::</span><span class="fu">pam</span>(<span class="dv">1</span><span class="sc">-</span>RF_variables<span class="sc">$</span>proximity,<span class="dv">3</span>)</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(rf.mds<span class="sc">$</span>points,<span class="at">type=</span><span class="st">"n"</span>)</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a><span class="fu">text</span>(rf.mds<span class="sc">$</span>points,<span class="fu">rownames</span>(rf.mds<span class="sc">$</span>points),<span class="at">col=</span>features_pam<span class="sc">$</span>clustering)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-16-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Having identified <code>pam</code> as our clustering algorithm of choice, the next critical step is determining the optimal number of clusters. A standard and effective technique for this purpose is the silhouette method. The silhouette score measures how similar an object is to its own cluster compared to other clusters. Values range between -1 and 1, with a high value indicating that the object is well matched to its own cluster and poorly matched to neighboring clusters. By plotting the silhouette scores for different numbers of clusters, we can visually inspect and select the number that gives the highest silhouette score, thus ensuring optimal cluster cohesion and separation. The code snippet provided demonstrates the application of <code>pam</code> on the <code>randomForest</code> proximity matrix for a specified number of clusters, in this case, three. By iterating over different cluster counts and assessing their silhouette scores, we can confidently determine the most appropriate number of clusters for our data.</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb28"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb28-1"><a href="#cb28-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Calculate silhouette widths for different number of clusters</span></span>
+<span id="cb28-2"><a href="#cb28-2" aria-hidden="true" tabindex="-1"></a>sil_width <span class="ot">&lt;-</span> <span class="fu">sapply</span>(<span class="dv">2</span><span class="sc">:</span><span class="dv">10</span>, <span class="cf">function</span>(k) {</span>
+<span id="cb28-3"><a href="#cb28-3" aria-hidden="true" tabindex="-1"></a>  pam_fit <span class="ot">&lt;-</span> cluster<span class="sc">::</span><span class="fu">pam</span>(<span class="dv">1</span><span class="sc">-</span>RF_variables<span class="sc">$</span>proximity, k)</span>
+<span id="cb28-4"><a href="#cb28-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mean</span>(cluster<span class="sc">::</span><span class="fu">silhouette</span>(pam_fit)[,<span class="st">"sil_width"</span>])</span>
+<span id="cb28-5"><a href="#cb28-5" aria-hidden="true" tabindex="-1"></a>})</span>
+<span id="cb28-6"><a href="#cb28-6" aria-hidden="true" tabindex="-1"></a>sil_width<span class="ot">&lt;-</span><span class="fu">c</span>(<span class="dv">0</span>,sil_width)</span>
+<span id="cb28-7"><a href="#cb28-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Plot the silhouette scores</span></span>
+<span id="cb28-8"><a href="#cb28-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(<span class="dv">1</span><span class="sc">:</span><span class="dv">10</span>, sil_width, <span class="at">type=</span><span class="st">'b'</span>, <span class="at">xlab=</span><span class="st">'Number of clusters'</span>, <span class="at">ylab=</span><span class="st">'Silhouette Width'</span>, <span class="at">main=</span><span class="st">'Optimal number of clusters based on Silhouette Width'</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-17-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>By executing the above code, we will obtain a graph that helps in identifying the number of clusters that maximize the silhouette width, providing a clear criterion for cluster selection. <strong>What is the best number of clusters according to Silhouette Width?</strong></p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb29"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>features_pam <span class="ot">&lt;-</span> cluster<span class="sc">::</span><span class="fu">pam</span>(<span class="dv">1</span><span class="sc">-</span>RF_variables<span class="sc">$</span>proximity,<span class="fu">which.max</span>(sil_width))</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(rf.mds<span class="sc">$</span>points,<span class="at">type=</span><span class="st">"n"</span>)</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a><span class="fu">text</span>(rf.mds<span class="sc">$</span>points,<span class="fu">rownames</span>(rf.mds<span class="sc">$</span>points),<span class="at">col=</span>features_pam<span class="sc">$</span>clustering)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-18-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>So given the clustering, we can have a look at a heatmap to check the expression pattern of the data:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb30"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb30-1"><a href="#cb30-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Generate colors for clusters</span></span>
+<span id="cb30-2"><a href="#cb30-2" aria-hidden="true" tabindex="-1"></a>cluster_colors <span class="ot">&lt;-</span> <span class="fu">rainbow</span>(<span class="fu">length</span>(<span class="fu">unique</span>(features_pam<span class="sc">$</span>clustering)))</span>
+<span id="cb30-3"><a href="#cb30-3" aria-hidden="true" tabindex="-1"></a>side_colors <span class="ot">&lt;-</span> cluster_colors[features_pam<span class="sc">$</span>clustering[<span class="fu">order</span>(features_pam<span class="sc">$</span>clustering)]]</span>
+<span id="cb30-4"><a href="#cb30-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Generate colors for subtypes</span></span>
+<span id="cb30-5"><a href="#cb30-5" aria-hidden="true" tabindex="-1"></a>subtype_colors <span class="ot">&lt;-</span> <span class="fu">rainbow</span>(<span class="fu">length</span>(<span class="fu">unique</span>(breast.TCGA<span class="sc">$</span>data.train<span class="sc">$</span>subtype)))</span>
+<span id="cb30-6"><a href="#cb30-6" aria-hidden="true" tabindex="-1"></a>row_side_colors <span class="ot">&lt;-</span> subtype_colors[<span class="fu">as.numeric</span>(<span class="fu">as.factor</span>(breast.TCGA<span class="sc">$</span>data.train<span class="sc">$</span>subtype))]</span>
+<span id="cb30-7"><a href="#cb30-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb30-8"><a href="#cb30-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Plotting the heatmap</span></span>
+<span id="cb30-9"><a href="#cb30-9" aria-hidden="true" tabindex="-1"></a>gplots<span class="sc">::</span><span class="fu">heatmap.2</span>(<span class="fu">as.matrix</span>(merge_data[,importance_measure_integration[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>,]<span class="sc">$</span>features][,<span class="fu">order</span>(features_pam<span class="sc">$</span>clustering)]),</span>
+<span id="cb30-10"><a href="#cb30-10" aria-hidden="true" tabindex="-1"></a>                  <span class="at">notecol=</span><span class="st">"black"</span>,      <span class="co"># change font color of cell labels to black</span></span>
+<span id="cb30-11"><a href="#cb30-11" aria-hidden="true" tabindex="-1"></a>                  <span class="at">density.info=</span><span class="st">"none"</span>,  <span class="co"># turn off density plot inside color legend</span></span>
+<span id="cb30-12"><a href="#cb30-12" aria-hidden="true" tabindex="-1"></a>                  <span class="at">trace=</span><span class="st">"none"</span>,         <span class="co"># turn off trace lines inside the heatmap</span></span>
+<span id="cb30-13"><a href="#cb30-13" aria-hidden="true" tabindex="-1"></a>                  <span class="at">margins =</span> <span class="fu">c</span>(<span class="dv">12</span>,<span class="dv">9</span>),    <span class="co"># space for the labels</span></span>
+<span id="cb30-14"><a href="#cb30-14" aria-hidden="true" tabindex="-1"></a>                  <span class="at">col =</span> <span class="fu">colorRampPalette</span>(<span class="fu">c</span>(<span class="st">"blue"</span>, <span class="st">"white"</span>, <span class="st">"red"</span>))(<span class="dv">25</span>), <span class="co"># color scheme</span></span>
+<span id="cb30-15"><a href="#cb30-15" aria-hidden="true" tabindex="-1"></a>                  <span class="at">srtCol =</span> <span class="dv">45</span>,          <span class="co"># rotate column labels</span></span>
+<span id="cb30-16"><a href="#cb30-16" aria-hidden="true" tabindex="-1"></a>                  <span class="at">adjCol =</span> <span class="fu">c</span>(<span class="fl">0.5</span>, <span class="fl">0.5</span>), <span class="co"># center column labels</span></span>
+<span id="cb30-17"><a href="#cb30-17" aria-hidden="true" tabindex="-1"></a>                  <span class="at">dendrogram=</span><span class="st">"row"</span>,     <span class="co"># only draw a row dendrogram</span></span>
+<span id="cb30-18"><a href="#cb30-18" aria-hidden="true" tabindex="-1"></a>                  <span class="at">Colv=</span>F,</span>
+<span id="cb30-19"><a href="#cb30-19" aria-hidden="true" tabindex="-1"></a>                  <span class="at">cexRow =</span> <span class="fl">0.9</span>,         <span class="co"># size of row labels</span></span>
+<span id="cb30-20"><a href="#cb30-20" aria-hidden="true" tabindex="-1"></a>                  <span class="at">cexCol =</span> <span class="fl">0.9</span>,</span>
+<span id="cb30-21"><a href="#cb30-21" aria-hidden="true" tabindex="-1"></a>                  <span class="at">scale =</span> <span class="st">"row"</span>,        <span class="co"># size of column labels</span></span>
+<span id="cb30-22"><a href="#cb30-22" aria-hidden="true" tabindex="-1"></a>                  <span class="at">ColSideColors =</span> side_colors,<span class="at">RowSideColors =</span>row_side_colors) <span class="co"># Add the column side colors</span></span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-19-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>The scaled expression pattern more or less shows the our clusters has been effectively capturing the underlining pattern in the data.</p>
+<p>The clustering so far has been on the training set, One question that we can ask is whether we see similar pattern of feature clustering if we perform the same analysis on the test set?</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb31"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a><span class="fu">set.seed</span>(<span class="dv">123</span>)</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>RF_variables_test<span class="ot">&lt;-</span>randomForest<span class="sc">::</span><span class="fu">randomForest</span>(<span class="fu">t</span>(merged_data_test[,importance_measure_integration[<span class="dv">1</span><span class="sc">:</span><span class="dv">30</span>,]<span class="sc">$</span>features]))</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a>rf.mds_test <span class="ot">&lt;-</span> stats<span class="sc">::</span><span class="fu">cmdscale</span>(<span class="dv">1</span><span class="sc">-</span>RF_variables_test<span class="sc">$</span>proximity, <span class="at">eig =</span> <span class="cn">TRUE</span>, <span class="at">k =</span> <span class="dv">2</span>)</span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>features_pam_test <span class="ot">&lt;-</span> cluster<span class="sc">::</span><span class="fu">pam</span>(<span class="dv">1</span><span class="sc">-</span>RF_variables_test<span class="sc">$</span>proximity,<span class="fu">which.max</span>(sil_width))</span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="fu">par</span>(<span class="at">mfrow=</span><span class="fu">c</span>(<span class="dv">1</span>,<span class="dv">2</span>))</span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(rf.mds<span class="sc">$</span>points,<span class="at">type=</span><span class="st">"n"</span>,<span class="at">main=</span><span class="st">"Training set"</span>)</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a><span class="fu">text</span>(rf.mds<span class="sc">$</span>points,<span class="fu">rownames</span>(rf.mds<span class="sc">$</span>points),<span class="at">col=</span>features_pam<span class="sc">$</span>clustering)</span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a><span class="fu">plot</span>(rf.mds_test<span class="sc">$</span>points,<span class="at">type=</span><span class="st">"n"</span>,<span class="at">main=</span><span class="st">"Test set"</span>)</span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a><span class="fu">text</span>(rf.mds_test<span class="sc">$</span>points,<span class="fu">rownames</span>(rf.mds_test<span class="sc">$</span>points),<span class="at">col=</span>features_pam_test<span class="sc">$</span>clustering)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-20-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Just looking at the plots, the clustering looks very similar. This is a good indication. We can also go one step further and quantify the comparisons of two clusters:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb32"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb32-1"><a href="#cb32-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(ggplot2)</span>
+<span id="cb32-2"><a href="#cb32-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-3"><a href="#cb32-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a contingency table</span></span>
+<span id="cb32-4"><a href="#cb32-4" aria-hidden="true" tabindex="-1"></a>contingency_table <span class="ot">&lt;-</span> <span class="fu">table</span>(features_pam<span class="sc">$</span>clustering, features_pam_test<span class="sc">$</span>clustering)</span>
+<span id="cb32-5"><a href="#cb32-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-6"><a href="#cb32-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Convert the table to a data frame for ggplot</span></span>
+<span id="cb32-7"><a href="#cb32-7" aria-hidden="true" tabindex="-1"></a>df <span class="ot">&lt;-</span> <span class="fu">as.data.frame</span>(<span class="fu">as.table</span>(contingency_table))</span>
+<span id="cb32-8"><a href="#cb32-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb32-9"><a href="#cb32-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a heatmap</span></span>
+<span id="cb32-10"><a href="#cb32-10" aria-hidden="true" tabindex="-1"></a><span class="fu">ggplot</span>(<span class="at">data =</span> df, <span class="fu">aes</span>(<span class="at">x =</span> Var1, <span class="at">y =</span> Var2)) <span class="sc">+</span> </span>
+<span id="cb32-11"><a href="#cb32-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_tile</span>(<span class="fu">aes</span>(<span class="at">fill =</span> Freq), <span class="at">color =</span> <span class="st">"white"</span>) <span class="sc">+</span></span>
+<span id="cb32-12"><a href="#cb32-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">geom_text</span>(<span class="fu">aes</span>(<span class="at">label =</span> <span class="fu">sprintf</span>(<span class="st">"%d"</span>, Freq)), <span class="at">vjust =</span> <span class="dv">1</span>) <span class="sc">+</span></span>
+<span id="cb32-13"><a href="#cb32-13" aria-hidden="true" tabindex="-1"></a>  <span class="fu">scale_fill_gradient</span>(<span class="at">low =</span> <span class="st">"white"</span>, <span class="at">high =</span> <span class="st">"steelblue"</span>) <span class="sc">+</span></span>
+<span id="cb32-14"><a href="#cb32-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">labs</span>(<span class="at">title =</span> <span class="st">"Cross-tabulation of Clusters"</span>,</span>
+<span id="cb32-15"><a href="#cb32-15" aria-hidden="true" tabindex="-1"></a>       <span class="at">x =</span> <span class="st">"Training Clusters"</span>,</span>
+<span id="cb32-16"><a href="#cb32-16" aria-hidden="true" tabindex="-1"></a>       <span class="at">y =</span> <span class="st">"Test Clusters"</span>,</span>
+<span id="cb32-17"><a href="#cb32-17" aria-hidden="true" tabindex="-1"></a>       <span class="at">fill =</span> <span class="st">"Count"</span>) <span class="sc">+</span></span>
+<span id="cb32-18"><a href="#cb32-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">theme_minimal</span>()</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output-display">
+<p><img src="random_forests_files/figure-html/unnamed-chunk-21-1.png" class="img-fluid" width="672"></p>
+</div>
+</div>
+<p>Here we used a cross-tabulation heatmap (or confusion matrix heatmap) which provides a visual representation of the relationship between two clustering results. In this context, it will show how clusters from the training data correspond to clusters from the test data.</p>
+<p>We can also use other, more formal, measures to say something about the clustering comparison:</p>
+<div class="cell">
+<div class="sourceCode cell-code" id="cb33"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb33-1"><a href="#cb33-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="st">"Adjusted Rand Index: "</span>,mclust<span class="sc">::</span><span class="fu">adjustedRandIndex</span>(features_pam<span class="sc">$</span>clustering, features_pam_test<span class="sc">$</span>clustering),<span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span></code><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></pre></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Adjusted Rand Index:  0.6280206 </code></pre>
+</div>
+</div>
+<p>The Adjusted Rand Index (ARI) is a measure that quantifies the similarity between two data clusterings, accounting for chance grouping of elements. The value of ARI lies between -1 and 1, where an ARI of 1 indicates that the two clusterings are identical, and an ARI of 0 suggests that the clustering result is no better than a random assignment. In our case, the computed ARI provides a numerical assessment of the consistency between our training and test data clusterings. A higher ARI value indicates a closer alignment between the two clusterings. Our ARI is fairly OK which makes us more confident about our selected variables.</p>
+<p>This concludes our lab, but one can go forward with pathway analysis, etc., to further explore the underlying biological processes and molecular interactions associated with the identified clusters.</p>
 </section>
 </section>
 </section>
