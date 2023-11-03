@@ -1,45 +1,53 @@
 ---
 title: "Random Forest for Data Integration"
 author: "Payam Emami"
-format: html
+format:
+  html:
+    toc: true
+    toc-expand: 3
 editor: visual
 editor_options: 
   chunk_output_type: console
 ---
 
-Setup the environment
-
-```{r,message=FALSE,warning=FALSE,eval=FALSE}
-
-# List of packages to be installed
-packages <- c("ggplot2", "randomForest", "blockForest","cluster","gplots","mclust")
-
-# Check and install missing packages
-new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
-if(length(new_packages)) install.packages(new_packages, dependencies = TRUE, type = "binary")
-
-# Load the libraries
-library(ggplot2)
-library(randomForest)
-library(blockForest)
-
-```
 
 ## Introduction
 
-In classical data integration, we would like to use information across different modalities (eg., transcriptome, proteome and metabolome) to gain more comprehensive insights into the biological systems under study. This type of data can be used for an array of different purposes including but not limited to molecular classification, stratification of patients, outcome predictions and understanding of regulatory processes such as gene regulation and pathway aAnalysis.
+In classical data integration, we would like to use information across different modalities (e.g. transcriptome, proteome and metabolome) to gain more comprehensive insights into the biological systems under study. This type of data can be used for an array of different purposes including but not limited to molecular classification, stratification of patients, outcome predictions and understanding of regulatory processes such as gene regulation and pathway analysis.
 
-In this specific context, we are going to focus on outcome prediction modeling and segmentation, which are promising because each type of omics data may contribute valuable information for the prediction of phenotypic outcomes. More specifically we are going to focus on supervised and unsupervised data integration wherein we have obtained patient data for which several types of omics data are available for the same samples (e.g. patients). We are going to use Random Forest to model the complex relationships between various data types and the outcomes. Random Forest is particularly suited for this task due to their ability to handle high-dimensional, heterogeneous data and capture intricate, non-linear interactions.
+In this specific context, we are going to focus on outcome prediction modeling and segmentation, which are promising because each type of omics data may contribute valuable information for the prediction of phenotypic outcomes. More specifically we are going to focus on supervised and unsupervised data integration wherein we have obtained patient data for which several types of omics data are available for the same samples (e.g. patients). We are going to use Random Forest to model the complex relationships between various data types and the outcomes. Random Forest is particularly suited for this task due to its ability to handle high-dimensional and heterogeneous data as well as its ability to and capture intricate, non-linear interactions.
+
+Briefly, in this tutorial we will: 
+
+- briefly introduce Random Forest algorithm to predict the outcome of cancer molecular subtype given individual omic data set, such as miRNA, mRNA or proteomics.
+- expand upon Random Forest and learn about Block Forests algorithm to integrate multiple omics to improve classification of cancer molecular subtypes and find top features driving the classification.
+
+To do so, we need to set-up up our environment
+```{r, message=FALSE, warning=FALSE, eval=FALSE}
+# list of packages to be installed
+packages <- c("ggplot2", "randomForest", "blockForest","cluster","gplots","mclust")
+
+# check and install missing packages
+new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+if(length(new_packages)) install.packages(new_packages, dependencies = TRUE, type = "binary")
+
+# load the libraries
+library(ggplot2)
+library(randomForest)
+library(blockForest)
+```
 
 # Random Forest
 
-Before diving into data integration, we first need a recap for Random Forest and its foundational concepts (for more in-depth review of Random Forest, see [here](http://payamemami.com/randomforest-basics/ "Random Forest basics")). Random Forest is an ensemble learning method that operates by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes (classification) or mean prediction (regression) of the individual trees.
+Before diving into data integration, let's recap what Random Forest is and the basic concepts behind it (for more in-depth review of Random Forest, see [here](http://payamemami.com/randomforest-basics/ "Random Forest basics")). Random Forest is an ensemble learning method that operates by constructing a multitude of decision trees at training time and outputting the class that is the mode of the classes (for the classification task) or mean prediction (for regression taks) of the individual trees.
 
 ## Decision Trees
 
 Random Forest is built upon decision trees, which are tree-like models of decisions based on features' values leading to a prediction about the target variable.
 
 ```{mermaid}
+%%| fig-align: center
+
 graph TB
   A["Is feature X > 5?"] -- Yes --> B["Is feature Y > 7?"]
   B -- Yes --> C["Class A"]
@@ -59,6 +67,8 @@ Random Forest improves the performance and accuracy of decision trees through ba
 In addition to data sampling, Random Forest selects a random subset of features at each split, introducing feature randomness, and resulting in diverse trees. This randomness ensures that the model is robust and less prone to overfitting.
 
 ```{mermaid}
+%%| fig-align: center
+
 graph LR
   RF["Data"] --> B["Bagging"]
   B --> S["Subsets of Dataset"]
@@ -71,19 +81,19 @@ graph LR
 
 ## Advantages of Random Forest
 
-Random Forest is known for its robustness and high accuracy, efficiently handling large datasets with higher dimensionality. It can manage missing values and can also provides estimates of feature importance, enabling insights into the driving factors behind predictions. The algorithm is less likely to overfit than individual decision trees, thanks to the diversity introduced by training on different subsets of data and feature randomness. Finally,Random Forest doesn't make any underlying assumptions about the distribution or the functional form of the data. It is this characteristic that imparts Random Forest with significant flexibility, making it adaptable to a wide array of data distributions and structures.
+Random Forest is known for its robustness and high accuracy and it efficiently handles large data sets with higher dimensionality. It can manage missing values and can also provides estimates of feature importance, enabling insights into the driving factors behind predictions. The algorithm is less likely to overfit than individual decision trees, thanks to the diversity introduced by training on different subsets of data and feature randomness. Finally, Random Forest does not make any underlying assumptions about the distribution or the functional form of the data. It is these characteristics that imparts Random Forest with significant flexibility, making it adaptable to a wide array of data distributions and structures.
 
 ## Perform Random Forest in R
 
-There are many packages for random forest. We have been using `randomForest` package in R that does a decent job and is fast enough for most of the applications. There are other implementations that you can check out such as `ranger` that is even faster. We here go through `randomForest` package briefly.
+There are many packages for Random Forest. We have been using `randomForest` package in R that does implementsBreiman and Cutler's Random Forests algorithm and it is good enough for most of the applications. There are other packages that you can check out such as `ranger` that is a fast implementation of Random Forests, particularly suited for high dimensional data. Here we go through `randomForest` package briefly.
 
 ### Data
 
-Our data has to be in a data.frame where features are in the columns and samples in the rows. The categorical variables should preferably be `factor`. For now we are going to use TCGA dataset from mixOmics.
+Our data has to be in a data.frame where features are in the columns and samples in the rows. The categorical variables should preferably be a `factor`. For now we are going to use TCGA dataset from mixOmics.
 
-> *This data set is a small subset of the full data set from The Cancer Genome Atlas that can be analysed with the DIABLO framework. It contains the expression or abundance of three matching omics data sets: mRNA, miRNA and proteomics for 150 breast cancer samples (Basal, Her2, Luminal A) in the training set, and 70 samples in the test set. The test set is missing the proteomics data set.*
+> *This data set is a small subset of the full data set from The Cancer Genome Atlas that can be analysed with the DIABLO framework. It contains the expression or abundance of three matching omics data sets: mRNA, miRNA and proteomics for 150 breast cancer samples (with three molecular subtypes of breast cancer: Basal, Her2, Luminal A) in the training set, and 70 samples in the test set. The test set is missing the proteomics data set.*
 
-```{r,message=FALSE}
+```{r, message=FALSE}
 # Download the dataset
 download.file("https://github.com/mixOmicsTeam/mixOmics/raw/master/data/breast.TCGA.rda", destfile = "TCGA.rda")
 
@@ -91,67 +101,99 @@ download.file("https://github.com/mixOmicsTeam/mixOmics/raw/master/data/breast.T
 load("TCGA.rda")
 ```
 
-This data has already been split into a list with two elements. Training and testing. Each element itself is a list of four elements. Three elements are the actual datasets and one is the cancer subtypes.
+This data has already been split into a list with two elements: training and testing. The first element (training) contains four elements, again lists, containing miRNA, mRNA, proteomics and cancer molecular subtypes. The second element (testing) contains three lists holding miRNA, mRNA and molecular subtypes data (proteomics data are missing here).
 
 ```{r}
 str(breast.TCGA)
 ```
 
-Now we can go ahead and do the modeling.
-
+### Modeling (running RF)
+Now we can go ahead and do the modeling. Let's use miRNA data to build a model predicting the cancer molecular subtypes.
 ```{r}
 # set the seed for reproduciblity
 set.seed(123)
 
 # run the model
 rf_mirna <- randomForest::randomForest(breast.TCGA$data.train$mirna,
-                                      y = breast.TCGA$data.train$subtype,keep.forest=T)
+                                      y = breast.TCGA$data.train$subtype, keep.forest=T)
 ```
 
 Let's have a look at the results
-
 ```{r}
 print(rf_mirna)
-
 ```
 
 The output tells us that the model was initiated with the **`randomForest()`** function, using the miRNA data as predictors (x) and the cancer subtypes as the response (y). It is a classification type model, as indicated.
 
 The model is composed of 500 trees ("Number of trees: 500"), and at each decision split in the trees, 13 variables or features were randomly selected and assessed to identify the optimal split ("No. of variables tried at each split: 13").
 
-The Out-Of-Bag (OOB) error estimate is `r as.numeric(round(rf_mirna$err.rate[rf_mirna$ntree, "OOB"] * 100, digits = 2))`%. OOB error is a unique feature of Random Forest; it provides an internal validation mechanism. During the training of each tree, a subset of the data is left out (not sampled) and used to validate the tree, giving an error estimate. This OOB error is particularly useful as it offers an unbiased performance metric without the need for cross-validation or a separate test set. In this case, the `r as.numeric(round(rf_mirna$err.rate[rf_mirna$ntree, "OOB"] * 100, digits = 2))`% OOB error rate means the model is expected to misclassify approximately 15.33% of new samples, offering a glimpse into the model's accuracy without a separate validation set.
+The Out-Of-Bag (OOB) error estimate is `r as.numeric(round(rf_mirna$err.rate[rf_mirna$ntree, "OOB"] * 100, digits = 2))`%. OOB error is a unique feature of Random Forest: it provides an internal validation mechanism. During the training of each tree, a subset of the data is left out (not sampled) and used to validate the tree, giving an error estimate. This OOB error is particularly useful as it offers an unbiased performance metric without the need for cross-validation or a separate test set. In this case, the `r as.numeric(round(rf_mirna$err.rate[rf_mirna$ntree, "OOB"] * 100, digits = 2))`% OOB error rate means the model is expected to misclassify (incorrectly predict) approximately 15.33% of new samples, offering a glimpse into the model's accuracy without a separate validation set.
 
-The confusion matrix for the training set reveals detailed class-specific performance. For the 'Basal' subtype, the model achieved a class error rate of `r round(rf_mirna$confusion["Basal","class.error"]*100,2)`%, with `r rf_mirna$confusion["Basal","Basal"]` correct predictions. The 'Her2' subtype encountered a higher error rate of `r  round(rf_mirna$confusion["Her2","class.error"]*100,2)`%, resulting from a substantial number of misclassifications. In contrast, the 'LumA' subtype exhibited impressive accuracy, with a mere `r round(rf_mirna$confusion["LumA","class.error"]*100,2)`% error rate and `r rf_mirna$confusion["LumA","LumA"]` correct classifications.
+The confusion matrix for the training set reveals detailed class-specific performance. For the 'Basal' subtype, the model achieved a classification error rate of `r round(rf_mirna$confusion["Basal","class.error"]*100,2)`%, with `r rf_mirna$confusion["Basal","Basal"]` correct predictions. The 'Her2' subtype encountered a higher classification error rate of `r  round(rf_mirna$confusion["Her2","class.error"]*100,2)`%, resulting from a substantial number of misclassifications. In contrast, the 'LumA' subtype exhibited impressive accuracy, with a mere `r round(rf_mirna$confusion["LumA","class.error"]*100,2)`% error rate and `r rf_mirna$confusion["LumA","LumA"]` correct classifications.
 
-We can go ahead and check the performance of the model on the test data.
-
+We can go ahead and check the performance of the model on the test, unseen so far, data.
 ```{r}
-
 predictions_mirna <- randomForest:::predict.randomForest(rf_mirna,
                                                          breast.TCGA$data.test$mirna)
-# Create a confusion matrix
+# create a confusion matrix
 conf_matrix <- table(breast.TCGA$data.test$subtype, predictions_mirna)
 
-# Print the confusion matrix
+# print the confusion matrix
 print(conf_matrix)
 
-# Calculate the class error rates
+# calculate the class error rates
 class_error <- 1 - diag(conf_matrix) / rowSums(conf_matrix)
 
-# Calculate the overall error rate
+# calculate the overall error rate
 overall_error_rate <- (sum(conf_matrix) - sum(diag(conf_matrix))) / sum(conf_matrix)
 
-# Print class error rates
+# print class error rates
 print(class_error)
 
-# Print overall error rate
+# print overall error rate
 print(overall_error_rate)
 
 ```
 
 So we have about `r round(overall_error_rate*100,2)`% error rate in miRNA. How much error we have in mRNA?
 
-**Fit a model for mRNA and check the error on the test set.**
+::: {#exr-mRNA}
+## mRNA
+
+Fit a model for mRNA and check the error on the test set.
+:::
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the code"
+#| eval: false
+
+set.seed(123)
+rf_mrna <- randomForest::randomForest(breast.TCGA$data.train$mrna,
+                                      y = breast.TCGA$data.train$subtype, keep.forest=T)
+print(rf_mrna)
+
+predictions_mrna <- randomForest:::predict.randomForest(rf_mrna,
+                                                         breast.TCGA$data.test$mrna)
+# create a confusion matrix
+conf_matrix <- table(breast.TCGA$data.test$subtype, predictions_mrna)
+
+# print the confusion matrix
+print(conf_matrix)
+
+# calculate the class error rates
+class_error <- 1 - diag(conf_matrix) / rowSums(conf_matrix)
+
+# calculate the overall error rate
+overall_error_rate <- (sum(conf_matrix) - sum(diag(conf_matrix))) / sum(conf_matrix)
+
+# print class error rates
+print(class_error)
+
+# print overall error rate
+print(overall_error_rate)
+
+```
 
 ## Hyperparameters
 
@@ -159,7 +201,7 @@ There are some parameters that need tuning to get better performance from Random
 
 Two of the most important parameters are:
 
-### 1. Number of Trees
+### 1. Number of Trees {.unnumbered .unlisted}
 
 This parameter specifies the total count of trees in the forest. Each tree contributes to the final decision, making a vote for classifying an object or predicting a continuous value.
 
@@ -171,7 +213,7 @@ This parameter specifies the total count of trees in the forest. Each tree contr
 
     -   A common practice is to start with a moderate number of trees and increase it until the error rate stabilizes.
 
-### 2. Number of Features Considered at Each Split:
+### 2. Number of Features Considered at Each Split {.unnumbered .unlisted}
 
 This parameter determines the maximum number of features considered for splitting at each node. Random Forest involves randomly selecting a subset of features at each split, introducing diversity among the trees and making the model robust.
 
@@ -183,17 +225,57 @@ This parameter determines the maximum number of features considered for splittin
 
     -   Experimenting with different values through techniques like grid search or random search can help identify the optimal number of features for your specific dataset and problem.
 
-We are going to skip tuning for now.
+We are going to skip tuning for now to focus on the data integration with Random Forest.
 
 # Data Integration using Random Forests
 
-One of the major issues that needs to be addressed when it comes to data integration is data distribution. Biological data come with different distributions and that make it unsuitable to simply concatenate RNASeq and proteomics data and perform a regression or classification for most of the methods. However, as mentioned before Random Forest does not make any assumptions about the data distribution. because of this, it is possible to merge the data and perform the analysis on the entire data.
+One of the major issues that needs to be addressed when it comes to data integration is data distribution. Biological data come with different distributions and that make it unsuitable to simply concatenate RNASeq and proteomics data and perform a regression or classification for most of the methods. However, as mentioned before Random Forest does not make any assumptions about the data distribution. Because of this, it is possible to merge the data and perform the analysis on the entire data.
 
-**This is another task for you. Merge the mRNA and miRNA data, do the modelling using Random Forest and calculate the performance on the merged test data.**
+::: {#exr-merge}
+## mRNA and miRNA
 
-One of the issues with naively concatenating the datasets and do Random Forest is that data views that have fewer variables are underrepresented in the variable splitting. This means that for example if we are to combine clinical with 20 variables and methylation data with 2 million sites, the clinical variables will have a very little chance of being selected for split in each tree. Another issue is that even if we have the data views with similar sizes, one data view can have significantly higher information content that others. It is reasonable to give more priority to the modalities that can give us more accurate predictions. `blockForest` is the name of one of the algorithms that allows us to take into account the block stucture of the data in an intuitive way leading to much more sound algorithm that simply concatenating the data.
+Merge mRNA and miRNA data sets, do the modelling using Random Forest and calculate the performance on the merged test data.
+:::
 
-## blockForest
+
+```{r}
+#| code-fold: true
+#| code-summary: "Show the code"
+#| eval: false
+
+set.seed(123)
+
+data_train_mirna_mrna <- cbind(breast.TCGA$data.train$mrna, breast.TCGA$data.train$mirna)
+data_test_mirna_mrna <- cbind(breast.TCGA$data.test$mrna, breast.TCGA$data.test$mirna)
+
+rf_mirna_mrna <- randomForest::randomForest(data_train_mirna_mrna,
+                                      y = breast.TCGA$data.train$subtype, keep.forest=T)
+print(rf_mirna_mrna)
+
+predictions_mirna_mrna <- randomForest:::predict.randomForest(rf_mirna_mrna, 
+                                                         data_test_mirna_mrna)
+# create a confusion matrix
+conf_matrix <- table(breast.TCGA$data.test$subtype, predictions_mirna_mrna)
+
+# print the confusion matrix
+print(conf_matrix)
+
+# calculate the class error rates
+class_error <- 1 - diag(conf_matrix) / rowSums(conf_matrix)
+
+# calculate the overall error rate
+overall_error_rate <- (sum(conf_matrix) - sum(diag(conf_matrix))) / sum(conf_matrix)
+
+# print class error rates
+print(class_error)
+
+# print overall error rate
+print(overall_error_rate)
+
+```
+One of the issues with naively concatenating the data sets and do Random Forest is that data views that have fewer variables are underrepresented in the variable splitting. This means that for example if we are to combine clinical data with 20 variables such as age, gender, or BMI and methylation data with 2 million CpG sites, the clinical variables will have a very little chance of being selected for split in each tree, and consequently will not contribute to the predictive performance of the model, even though we may know that age is driving the genome-wide DNA methylation alterations. Another issue is that even if we have the data sets (views) with similar sizes, one data view can have significantly higher information content that others. It is reasonable to give more priority to the modalities that can give us more accurate predictions. `blockForest` is the name of one of the algorithms that allows us to take into account the block structure of the data in an intuitive way leading to much more sound algorithm that simply concatenating the data.
+
+## BlockForest
 
 BlockForest is a machine learning technique specifically tailored for handling multi-omics data. In BlockForest, the data is divided into different "blocks," each representing a different type of omics data.
 
@@ -272,7 +354,7 @@ blocks <- lapply(1:2, function(x) which(blocks==x))
 
 set.seed(123)
 merged_model <- blockForest::blockfor(merge_data, breast.TCGA$data.train$subtype, blocks=blocks,
-                        block.method = "BlockForest",num.trees = 500,importance="permutation")
+                        block.method = "BlockForest", num.trees = 500, importance="permutation")
 
 ```
 
@@ -296,7 +378,6 @@ This is a similar output to the one we have seen before. The differences are:
 
     -   `r merged_model$paramvalues`: These are the optimized parameter values associated with each block of features. They are obtained through the parameter tuning process and are used to weight the blocks during model training.
 
-
 Since the OOBs have been used for doing parameter tunning, we cannot use them to evaluate the model. we will have to do cross-validation. We leave this for later and continue with the prediction.
 
 ```{r}
@@ -304,47 +385,54 @@ Since the OOBs have been used for doing parameter tunning, we cannot use them to
 merged_data_test <- cbind(breast.TCGA$data.test$mirna,
                                      breast.TCGA$data.test$mrna)
 colnames(merged_data_test) <- gsub("-", ".", colnames(merged_data_test))
+
 # get the prediction
 integrative_predictions <- blockForest:::predict.blockForest(merged_model$forest,
                                   data = merged_data_test)
 
-# Create a confusion matrix
+# create a confusion matrix
 conf_matrix <- table(breast.TCGA$data.test$subtype, integrative_predictions$predictions)
 
-# Print the confusion matrix
+# print the confusion matrix
 print(conf_matrix)
 
-# Calculate the class error rates
+# calculate the class error rates
 class_error <- 1 - diag(conf_matrix) / rowSums(conf_matrix)
 
-# Calculate the overall error rate
+# calculate the overall error rate
 overall_error_rate <- (sum(conf_matrix) - sum(diag(conf_matrix))) / sum(conf_matrix)
 
-# Print class error rates
+# print class error rates
 print(class_error)
 
-# Print overall error rate
+# print overall error rate
 print(overall_error_rate)
 ```
 
-So we have obtained a prediction accuracy. **Is it better or worse compared to separate modelling of datasets?**
+So we have obtained a prediction accuracy. **Is it better or worse compared to separate modelling of the data sets?**
 
 ### Visualize the Random Forest subspace
 
-Random Forest does not only give accuracy estimates but a lot more information that can be used to visiualize and forther analyze their internals.
+Random Forest does not only give accuracy estimates but a lot more information that can be used to visualize and further analyze their internals.
 
-One of these is called proximities. Random Forest proximity measures are a valuable tool for understanding the similarity between data points within a dataset. When a Random Forest model is trained, each tree in the forest classifies each data point into a specific leaf node. The proximity measure between two data points is calculated based on the frequency with which they end up in the same leaf node across all trees in the forest. In other words, the more often two data points are classified into the same leaf node, the higher their proximity measure, indicating a higher level of similarity. This measure can be normalized and used for various purposes, such as data clustering, outlier detection, and missing value imputation, providing insights into the underlying structure and relationships within the data.
+One of the useful pieces of information is called proximities. Random Forest proximity measures are a valuable tool for understanding the similarity between data points within a data set. When a Random Forest model is trained, each tree in the forest classifies each data point into a specific leaf node. The proximity measure between two data points is calculated based on the frequency with which they end up in the same leaf node across all trees in the forest. In other words, the more often two data points are classified into the same leaf node, the higher their proximity measure, indicating a higher level of similarity. This measure can be normalized and used for various purposes, such as data clustering, outlier detection, and missing value imputation and it thus provides insights into the underlying structure and relationships within the data.
 
-Let's try to extract those for the training and testing data
+Let's try to extract proximity measures for the training and testing data sets.
 
 ```{r}
+#| fig-align: center
+
+# load plotting library
 library(ggplot2)
+
+# reformat col names: change "-" to "."
 colnames(merge_data) <- gsub("-", ".", colnames(merge_data))
+
 # get node labels
 nodes<-blockForest:::predict.blockForest (merged_model$forest,data =merge_data ,type="terminalNodes")
 node_labels_training <- nodes$predictions
 
-# empty proximity matrix
+# initiate empty proximity matrix
 n_samples <- nrow(merge_data)
 proximity_matrix <- matrix(0, nrow=n_samples, ncol=n_samples)
 
@@ -357,9 +445,9 @@ for (i in seq_len(n_samples)) {
   }
 }
 
-
 # convert to distances
 distances <- 1 - (proximity_matrix)
+
 # do MDS
 rf.mds <- stats::cmdscale(distances, eig = TRUE, k = 2)
 
@@ -368,22 +456,19 @@ data_points <- rf.mds$points
 data_points <- cbind.data.frame(data_points,groups=as.character(breast.TCGA$data.train$subtype),dataset="training")
 names(data_points) <- c("p1","p2","groups","dataset")
 
-
 ## perform the same for the test set
-
-nodes<-blockForest:::predict.blockForest (merged_model$forest,data =merged_data_test ,type="terminalNodes")
+nodes <- blockForest:::predict.blockForest (merged_model$forest,data =merged_data_test ,type="terminalNodes")
 node_labels_test <- nodes$predictions
 
 # empty proximity matrix
 n_samples <- nrow(merged_data_test)
 proximity_matrix <- matrix(0, nrow=n_samples, ncol=n_samples)
 
-# get ing bag samples
+# get in bag samples
 inbag = simplify2array(merged_model$forest$inbag.counts)
 # Compute the proximity matrix
 for (i in seq_len(n_samples)) {
   for (j in seq_len(n_samples)) {
-
     proximity_matrix[i, j] <- sum(node_labels_test[i,] == node_labels_test[j,])
   }
 }
@@ -395,22 +480,25 @@ rf.mds <- stats::cmdscale(distances, eig = TRUE, k = 2)
 
 # plot MDS
 data_points_test <- rf.mds$points
-data_points_test <- cbind.data.frame(data_points_test,groups=as.character(breast.TCGA$data.test$subtype),dataset="test")
+data_points_test <- cbind.data.frame(data_points_test, groups=as.character(breast.TCGA$data.test$subtype), dataset="test")
 names(data_points_test) <- c("p1","p2","groups","dataset")
 
-ggplot(rbind(data_points,data_points_test))+geom_point(aes(x=p1,y=p2,color=groups,shape=dataset))
+ggplot(rbind(data_points,data_points_test)) + 
+  geom_point(aes(x=p1, y=p2, color=groups, shape=dataset))
 
 ```
 
-Using multidimensional scaling, we have collapsed the dataset to a set of lower dimentions that preserve the overall distance between the datapoints.
+Using multidimensional scaling, we have collapsed the dataset to a set of lower dimensions that preserve the overall distance between the data points.
 
 ### Variable importance
 
 Similar to regular Random Forest, blockForest also gives us variable importance. In the function call we have selected permutation based importance.
 
-We can go ahead and explore these to select the most important variables that discreminate the groups.
+We can go ahead and explore these to select the most important variables that discriminate the groups.
 
 ```{r}
+#| fig-align: center
+
 
 # extract the importance and add to a data frame together with modality information
 importance_measure_integration <- data.frame(features = names(merged_model$forest$variable.importance),
@@ -418,7 +506,6 @@ importance_measure_integration <- data.frame(features = names(merged_model$fores
            modality =  rep(c("mirna","mrna"), times=c(ncol(breast.TCGA$data.train$mirna),ncol(breast.TCGA$data.train$mrna))))
 
 # sort the importance
-
 importance_measure_integration <- 
   importance_measure_integration[order((importance_measure_integration[,2]),decreasing = T),]
 
@@ -435,11 +522,12 @@ ggplot(importance_measure_integration[1:30,],
 
 ### Unsupervised data integration
 
-Random Forest algorithm is inherently supervised but its flexiblity allows us to perform unsupervised data integration with it. In order to do that, we are going to do a simple trick. We are going to shuffle our data to create a synthetic copy of our original data. We are then going to perform the modelling such that the model differentiate between the real and synthetic copy. After than we can go ahead with the distance calculations etc.
+Random Forest algorithm is inherently supervised but its flexibility allows us to perform unsupervised data integration with it. In order to do that, we are going to do a simple trick. We are going to shuffle our data to create a synthetic copy of our original data. We are then going to perform the modelling such that the model differentiate between the real and synthetic copy. After than we can go ahead with the distance calculations etc.
 
 ```{r}
+#| fig-align: center
 
-  # merge the data first 
+# merge the data first 
 merge_data <- cbind(breast.TCGA$data.train$mirna,
                     breast.TCGA$data.train$mrna)
 
@@ -447,9 +535,10 @@ synth <- apply(merge_data,2, function(x) {
   sample(x, length(x), replace = TRUE)
 })
 
- x <- rbind(merge_data, synth)
- y <- factor(c(rep(1, nrow(merge_data)), rep(2, nrow(merge_data))))
- # create block structure
+x <- rbind(merge_data, synth)
+y <- factor(c(rep(1, nrow(merge_data)), rep(2, nrow(merge_data))))
+
+# create block structure
 blocks <- rep(c(1,2), times=c(ncol(breast.TCGA$data.train$mirna),ncol(breast.TCGA$data.train$mrna)))
 blocks <- lapply(1:2, function(x) which(blocks==x))
 
@@ -457,18 +546,19 @@ set.seed(123)
 merged_model <- blockForest::blockfor(x, y, blocks=blocks,
                         block.method = "BlockForest",num.trees = 500)
 
-
+# reforman column names
 colnames(merge_data) <- gsub("-", ".", colnames(merge_data))
+
 # get node labels
-nodes<-blockForest:::predict.blockForest (merged_model$forest,data =merge_data ,type="terminalNodes")
+nodes<-blockForest:::predict.blockForest (merged_model$forest, data=merge_data, type="terminalNodes")
 node_labels_training <- nodes$predictions
 
-# empty proximity matrix
+# initiate empty proximity matrix
 n_samples <- nrow(merge_data)
 proximity_matrix <- matrix(0, nrow=n_samples, ncol=n_samples)
 
 inbag = simplify2array(merged_model$forest$inbag.counts)
-# Compute the proximity matrix
+# compute the proximity matrix
 for (i in seq_len(n_samples)) {
   for (j in seq_len(n_samples)) {
     tree_idx = inbag[i, ] == 0 & inbag[j, ] == 0
@@ -476,9 +566,9 @@ for (i in seq_len(n_samples)) {
   }
 }
 
-
 # convert to distances
 distances <- 1 - (proximity_matrix)
+
 # do MDS
 rf.mds <- stats::cmdscale(distances, eig = TRUE, k = 2)
 
@@ -486,14 +576,16 @@ rf.mds <- stats::cmdscale(distances, eig = TRUE, k = 2)
 data_points <- rf.mds$points
 data_points <- cbind.data.frame(data_points,groups=as.character(breast.TCGA$data.train$subtype))
 names(data_points) <- c("p1","p2","groups")
-ggplot(rbind(data_points))+geom_point(aes(x=p1,y=p2,color=groups))
+ggplot(rbind(data_points))+geom_point(aes(x=p1, y=p2, color=groups))
 
 ```
 
-Now given that we can use random forest for unsupervised distance calculation, we now proceed with clustering of the variables we have selected in the supervised part (top 30 variables):
-
+Now given that we can use Random Forest for unsupervised distance calculation, we now proceed with clustering of the variables we have selected in the supervised part (top 30 variables):
 
 ```{r}
+#| fig-width: 7
+#| fig-height: 7
+#| fig-align: center
 
 set.seed(123)
 RF_variables<-randomForest::randomForest(t(merge_data[,importance_measure_integration[1:30,]$features]))
@@ -501,29 +593,27 @@ RF_variables<-randomForest::randomForest(t(merge_data[,importance_measure_integr
 rf.mds <- stats::cmdscale(1-RF_variables$proximity, eig = TRUE, k = 2)
 plot(rf.mds$points,type="n")
 text(rf.mds$points,rownames(rf.mds$points))
-
 ```
 
 In the code above, we used `randomForest` package to do unsupervised clustering. **Can you guess why we did not use `blockForest`**?
 
-The results of `randomForest` contain the proximity matrix which can use as a proxity to distance between the features in the random forest space. We can now use this proximity matrix to perform clustering of relevant features.
+The results of `randomForest` contain the proximity matrix which can use as a proxy to distance between the features in the random forest space. We can now use this proximity matrix to perform clustering of relevant features.
 
-In order to perform clustering, we are going to use the `pam` (Partitioning Around Medoids) algorithm. We use pam because it supports distance matrix, which means it can take the proximity matrix generated by `randomForest` and use it as a base to determine the distance between clusters. The way pam works is by initially selecting data points called medoids from the dataset. These medoids serve as the center of clusters. During the iterative optimization process, the algorithm assesses and swaps medoids with non-medoid data points to minimize the sum of the distances between the data points and their corresponding medoids. One of the main benefits of using pam over other clustering algorithms is its robustness to outliers. Since it uses medoids (actual data points) as the center of clusters, instead of mean values like in k-means, it is less influenced by extreme values. Moreover, pam is known for producing more accurate and consistent clusters, especially when the dataset has noise and outliers. Another advantage is its interpretability; by using actual data points as representatives, it is easier to understand and explain the characteristics of each cluster. All these attributes make pam a suitable choice for clustering features based on the proximity matrix from `randomForest`.
+In order to perform clustering, we are going to use the `pam` (Partitioning Around Medoids) algorithm. We use `pam` because it supports distance matrix, which means it can take the proximity matrix generated by `randomForest` and use it as a base to determine the distance between clusters. The way `pam` works is by initially selecting data points called medoids from the dataset. These medoids serve as the center of clusters. During the iterative optimization process, the algorithm assesses and swaps medoids with non-medoid data points to minimize the sum of the distances between the data points and their corresponding medoids. One of the main benefits of using `pam` over other clustering algorithms is its robustness to outliers. Since it uses medoids (actual data points) as the center of clusters, instead of mean values like in k-means, it is less influenced by extreme values. Moreover, `pam` is known for producing more accurate and consistent clusters, especially when the dataset has noise and outliers. Another advantage is its interpretability; by using actual data points as representatives, it is easier to understand and explain the characteristics of each cluster. All these attributes make `pam` a suitable choice for clustering features based on the proximity matrix from `randomForest`.
 
 ```{r}
-
+#| fig-width: 7
+#| fig-height: 7
+#| fig-align: center
 features_pam <- cluster::pam(1-RF_variables$proximity,3)
 plot(rf.mds$points,type="n")
 text(rf.mds$points,rownames(rf.mds$points),col=features_pam$clustering)
-
 ```
 
 Having identified `pam` as our clustering algorithm of choice, the next critical step is determining the optimal number of clusters. A standard and effective technique for this purpose is the silhouette method. The silhouette score measures how similar an object is to its own cluster compared to other clusters. Values range between -1 and 1, with a high value indicating that the object is well matched to its own cluster and poorly matched to neighboring clusters. By plotting the silhouette scores for different numbers of clusters, we can visually inspect and select the number that gives the highest silhouette score, thus ensuring optimal cluster cohesion and separation. The code snippet provided demonstrates the application of `pam` on the `randomForest` proximity matrix for a specified number of clusters, in this case, three. By iterating over different cluster counts and assessing their silhouette scores, we can confidently determine the most appropriate number of clusters for our data.
 
 ```{r}
-
-
-# Calculate silhouette widths for different number of clusters
+# calculate silhouette widths for different number of clusters
 sil_width <- sapply(2:10, function(k) {
   pam_fit <- cluster::pam(1-RF_variables$proximity, k)
   mean(cluster::silhouette(pam_fit)[,"sil_width"])
@@ -537,6 +627,9 @@ plot(1:10, sil_width, type='b', xlab='Number of clusters', ylab='Silhouette Widt
 By executing the above code, we will obtain a graph that helps in identifying the number of clusters that maximize the silhouette width, providing a clear criterion for cluster selection. **What is the best number of clusters according to Silhouette Width?**
 
 ```{r}
+#| fig-width: 7
+#| fig-height: 7
+#| fig-align: center
 features_pam <- cluster::pam(1-RF_variables$proximity,which.max(sil_width))
 plot(rf.mds$points,type="n")
 text(rf.mds$points,rownames(rf.mds$points),col=features_pam$clustering)
@@ -545,15 +638,19 @@ text(rf.mds$points,rownames(rf.mds$points),col=features_pam$clustering)
 So given the clustering, we can have a look at a heatmap to check the expression pattern of the data:
 
 ```{r}
+#| fig-width: 8
+#| fig-height: 10
+#| fig-align: center
 
-# Generate colors for clusters
+# generate colors for clusters
 cluster_colors <- rainbow(length(unique(features_pam$clustering)))
 side_colors <- cluster_colors[features_pam$clustering[order(features_pam$clustering)]]
-# Generate colors for subtypes
+
+# generate colors for subtypes
 subtype_colors <- rainbow(length(unique(breast.TCGA$data.train$subtype)))
 row_side_colors <- subtype_colors[as.numeric(as.factor(breast.TCGA$data.train$subtype))]
 
-# Plotting the heatmap
+# plot the heatmap
 gplots::heatmap.2(as.matrix(merge_data[,importance_measure_integration[1:30,]$features][,order(features_pam$clustering)]),
                   notecol="black",      # change font color of cell labels to black
                   density.info="none",  # turn off density plot inside color legend
@@ -571,12 +668,15 @@ gplots::heatmap.2(as.matrix(merge_data[,importance_measure_integration[1:30,]$fe
 
 ```
 
-
 The scaled expression pattern more or less shows the our clusters has been effectively capturing the underlining pattern in the data.
 
-The clustering so far has been on the training set, One question that we can ask is whether we see similar pattern of feature clustering if we perform the same analysis on the test set?
+The clustering so far has been on the training set. One question that we can ask is whether we see similar pattern of feature clustering if we perform the same analysis on the test set?
 
 ```{r}
+#| fig-width: 12
+#| fig-height: 7
+#| fig-align: center
+
 set.seed(123)
 RF_variables_test<-randomForest::randomForest(t(merged_data_test[,importance_measure_integration[1:30,]$features]))
 
@@ -591,19 +691,17 @@ plot(rf.mds_test$points,type="n",main="Test set")
 text(rf.mds_test$points,rownames(rf.mds_test$points),col=features_pam_test$clustering)
 
 ```
+
 Just looking at the plots, the clustering looks very similar. This is a good indication. We can also go one step further and quantify the comparisons of two clusters:
 
 ```{r}
-
-library(ggplot2)
-
-# Create a contingency table
+# create a contingency table
 contingency_table <- table(features_pam$clustering, features_pam_test$clustering)
 
-# Convert the table to a data frame for ggplot
+# convert the table to a data frame for ggplot
 df <- as.data.frame(as.table(contingency_table))
 
-# Create a heatmap
+# create a heatmap
 ggplot(data = df, aes(x = Var1, y = Var2)) + 
   geom_tile(aes(fill = Freq), color = "white") +
   geom_text(aes(label = sprintf("%d", Freq)), vjust = 1) +
@@ -614,10 +712,9 @@ ggplot(data = df, aes(x = Var1, y = Var2)) +
        fill = "Count") +
   theme_minimal()
 
-
 ```
 
-Here we used a cross-tabulation heatmap (or confusion matrix heatmap) which provides a visual representation of the relationship between two clustering results. In this context, it will show how clusters from the training data correspond to clusters from the test data. 
+Here we used a cross-tabulation heatmap, or confusion matrix heatmap, which provides a visual representation of the relationship between two clustering results. In this context, it will show how clusters from the training data correspond to clusters from the test data.
 
 We can also use other, more formal, measures to say something about the clustering comparison:
 
@@ -625,11 +722,14 @@ We can also use other, more formal, measures to say something about the clusteri
 cat("Adjusted Rand Index: ",mclust::adjustedRandIndex(features_pam$clustering, features_pam_test$clustering),"\n")
 ```
 
-The Adjusted Rand Index (ARI) is a measure that quantifies the similarity between two data clusterings, accounting for chance grouping of elements. The value of ARI lies between -1 and 1, where an ARI of 1 indicates that the two clusterings are identical, and an ARI of 0 suggests that the clustering result is no better than a random assignment. In our case, the computed ARI provides a numerical assessment of the consistency between our training and test data clusterings. A higher ARI value indicates a closer alignment between the two clusterings. Our ARI is fairly OK which makes us more confident about our selected variables. 
+The Adjusted Rand Index (ARI) is a measure that quantifies the similarity between two data clusterings, accounting for chance grouping of elements. The value of ARI lies between -1 and 1, where an ARI of 1 indicates that the two clusterings are identical, and an ARI of 0 suggests that the clustering result is no better than a random assignment. In our case, the computed ARI provides a numerical assessment of the consistency between our training and test data clusterings. A higher ARI value indicates a closer alignment between the two clusterings. Our ARI is fairly OK which makes us more confident about our selected variables.
 
-This concludes our lab, but one can go forward with pathway analysis, etc., to further explore the underlying biological processes and molecular interactions associated with the identified clusters.
+This concludes our lab, but one could go forward with pathway analysis etc. to further explore the underlying biological processes and molecular interactions associated with the identified clusters.
 
+## Summary
 
-
-
+- We saw how to use Random Forest for predicting the cancer subtypes given individual miRNA and mRNA data set, where we got overall classification rate ca. 0.17 (miRNA) and 0.057 (mRNA). 
+- We learned about Block Forests and saw that when combining miRNA and mRNA data sets the overall classification was ca. 0.085 and that the majority of the top features driving the classification were mRNA based, in line with the Random Forest results, where mRNA features were performing better as individual omics data set. 
+- We learned also how to use Random Forest for unsupervised data integration, based on features both from mRNA and miRNA data sets. 
+- Remember to tune your model parameters when applying Random Forest or Block Forests to your data, something that we had to leave out from this tutorial, but can be found in many textbooks and online materials. 
 
